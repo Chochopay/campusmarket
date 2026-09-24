@@ -10,7 +10,7 @@ class Listing(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(nullable=False)
     description: Mapped[str] = mapped_column(nullable=False)
-    status: Mapped[str] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(nullable=False, default="published")
     condition: Mapped[str] = mapped_column(nullable=False)
     mode: Mapped[str] = mapped_column(nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
@@ -18,7 +18,7 @@ class Listing(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
 
-    listingimages: Mapped[List["ListingImage"]] = relationship("ListingImage", back_populates="listing", cascade="all, delete-orphan" )
+    listingimages: Mapped[List["ListingImage"]] = relationship("ListingImage", back_populates="listing" )
 
 
 class ListingImage(Base):
@@ -26,7 +26,7 @@ class ListingImage(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     img_file: Mapped[str] = mapped_column(nullable=False)
-    listing_id: Mapped[int] = mapped_column(nullable=False)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listings.id"), nullable=False)
     position: Mapped[int] = mapped_column(nullable=False)
 
     listing: Mapped["Listing"] = relationship(back_populates="listingimages")
