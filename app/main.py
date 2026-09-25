@@ -12,9 +12,13 @@ from app.messages.models import Message
 from app.favorites.models import Favorite
 from app.reports.models import Report
 
+from app.auth.router import router as auth_router
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     yield
 
 app = FastAPI(lifespan=lifespan)
+
+app.include_router(auth_router)
