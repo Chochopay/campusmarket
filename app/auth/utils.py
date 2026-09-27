@@ -30,9 +30,9 @@ def create_access_token(data: dict) -> str:
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def decode_access_token(data: str) -> dict:
+def decode_access_token(token: str) -> dict:
     try:
-        decoded_token = jwt.decode(data, SECRET_KEY, algorithms=[ALGORITHM])
+        decoded_token = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except(JWTError):
         raise HTTPException(
             status_code=401,
