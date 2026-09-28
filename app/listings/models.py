@@ -18,7 +18,7 @@ class Listing(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
 
-    listingimages: Mapped[List["ListingImage"]] = relationship("ListingImage", back_populates="listing" )
+    listing_images: Mapped[List["ListingImage"]] = relationship("ListingImage", back_populates="listing" )
 
 
 class ListingImage(Base):
@@ -29,4 +29,4 @@ class ListingImage(Base):
     listing_id: Mapped[int] = mapped_column(ForeignKey("listings.id"), nullable=False)
     position: Mapped[int] = mapped_column(nullable=False)
 
-    listing: Mapped["Listing"] = relationship(back_populates="listingimages")
+    listing: Mapped["Listing"] = relationship(back_populates="listing_images")

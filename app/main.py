@@ -14,6 +14,8 @@ from app.reports.models import Report
 
 from app.auth.router import router as auth_router
 from app.users.router import router as users_router
+from app.categories.router import router as categories_router
+from app.listings.router import router as listings_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,3 +26,5 @@ app = FastAPI(lifespan=lifespan)
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(categories_router)
+app.include_router(listings_router)
