@@ -19,7 +19,7 @@ from app.listings.router import router as listings_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    #Base.metadata.create_all(bind=engine)
     yield
 
 app = FastAPI(lifespan=lifespan)

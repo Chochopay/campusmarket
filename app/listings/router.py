@@ -11,8 +11,9 @@ from app.categories.models import Category
 
 #Listings:
 
-#GET /listings (с query-фильтрами)
 #POST /listings
+
+#GET /listings (с query-фильтрами)
 #PATCH /listings/{id}
 #POST /listings/{id}/complete
 #POST /listings/{id}/images
@@ -48,9 +49,9 @@ def create_listing(
     db.refresh(new_listing)
     return new_listing
 
-@router.get("/{id}", response_model=ListingResponse)
-def get_listing_by_id(id: int, db: Session = Depends(get_db)):
-    listing = db.execute(select(Listing).where(Listing.id == id)).scalar_one_or_none()
+@router.get("/{listing_id}", response_model=ListingResponse)
+def get_listing_by_id(listing_id: int, db: Session = Depends(get_db)):
+    listing = db.execute(select(Listing).where(Listing.id == listing_id)).scalar_one_or_none()
     if not listing:
         raise HTTPException(
             status_code = 404,
