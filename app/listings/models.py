@@ -3,7 +3,7 @@ from sqlalchemy import ForeignKey, Numeric
 from decimal import Decimal
 from app.database import Base
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Listing(Base):
     __tablename__="listings"
@@ -15,7 +15,7 @@ class Listing(Base):
     condition: Mapped[str] = mapped_column(nullable=False)
     mode: Mapped[str] = mapped_column(nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    create_at: Mapped[datetime] = mapped_column(nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(nullable=False, default= lambda: datetime.now(timezone.utc))
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)

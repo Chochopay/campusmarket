@@ -2,19 +2,23 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.listings.schemas import ListingCreate, ListingResponse
+from app.listings.schemas import ListingCreate, ListingResponse, ListingUpdate
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.users.models import User
 from app.listings.models import Listing
 from app.categories.models import Category
 
-#Listings:
-
-#POST /listings
+from typing import List, Literal, Optional
+from decimal import Decimal
 
 #GET /listings (с query-фильтрами)
+#GET /listings/{id}
+#POST /listings
+
+#GET /listings/my
 #PATCH /listings/{id}
+
 #POST /listings/{id}/complete
 #POST /listings/{id}/images
 #DELETE /listings/{id}/images/{image_id}
@@ -32,8 +36,7 @@ def create_listing(
     if not is_category:
         raise HTTPException(
             status_code=404,
-            detail="Такой категории не существует"
-        )
+            )
 
     new_listing = Listing(
         name=data.name,
@@ -49,6 +52,14 @@ def create_listing(
     db.refresh(new_listing)
     return new_listing
 
+
+@router.get("/my", response_model=List[ListingResponse])
+def get_my_listings(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+
+    user_listings = db.execute(select(Listing).where(Listing.user_id == current_user.id)).scalars().all()
+    return user_listings
+
+
 @router.get("/{listing_id}", response_model=ListingResponse)
 def get_listing_by_id(listing_id: int, db: Session = Depends(get_db)):
     listing = db.execute(select(Listing).where(Listing.id == listing_id)).scalar_one_or_none()
@@ -58,3 +69,97 @@ def get_listing_by_id(listing_id: int, db: Session = Depends(get_db)):
             detail="Такого обьявления нет"
         )
     return listing
+
+
+@router.get("/", response_model=List[ListingResponse])
+def get_listings(
+        category_id: Optional[int] = None,
+        condition: Optional[str] = None,
+        mode: Optional[str] = None,
+        min_price: Optional[Decimal] = None,
+        max_price: Optional[Decimal] = None,
+        sort: Optional[Literal["date", "price"]] = None,
+        db: Session = Depends(get_db)
+):
+    query = select(Listing).where(Listing.status == "published")
+
+    if category_id is not None:
+        query = query.where(Listing.category_id == category_id)
+
+    if condition is not None:
+        query = query.where(Listing.condition == condition)
+
+    if mode is not None:
+        query = query.where(Listing.mode == mode)
+
+    if min_price is not None:
+        query = query.where(Listing.price >= min_price)
+
+    if max_price is not None:
+        query = query.where(Listing.price <=max_price)
+
+    if sort is not None:
+        if sort == "price":
+            query = query.order_by(Listing.price)
+        elif sort == "date":
+            query = query.order_by(Listing.created_at)
+
+    return db.execute(query).scalars().all()
+
+
+@router.patch("/{listing_id}", response_model=ListingResponse)
+def patch_listing(
+        listing_id: int,
+        listing_update: ListingUpdate,
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+
+    listing = db.execute(select(Listing).where(Listing.id == listing_id)).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(
+            status_code=404,
+            detail="Такого обьявления не существует"
+        )
+    if listing.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Это не выше обьявление"
+        )
+    if listing.status in ("reserved", "completed"):
+        raise HTTPException(
+            status_code=409,
+            detail="Вы не можете редактировать обьявление пока оно в нынешнем статусе"
+        )
+
+    update_data = listing_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(listing, key, value)
+
+    db.commit()
+    db.refresh(listing)
+    return listing
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

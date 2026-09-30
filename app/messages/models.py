@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import ForeignKey
 from app.database import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Message(Base):
     __tablename__="messages"
@@ -10,7 +10,7 @@ class Message(Base):
     request_id: Mapped[int] = mapped_column(ForeignKey("deal_requests.id"), nullable=False)
     sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     text: Mapped[str] = mapped_column(nullable=False)
-    created_at: Mapped[datetime] = mapped_column(nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(nullable=False, default=datetime.now(timezone.utc))
 
     request: Mapped["DealRequest"] = relationship(back_populates="messages")
 
