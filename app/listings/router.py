@@ -15,7 +15,6 @@ from decimal import Decimal
 #GET /listings (с query-фильтрами)
 #GET /listings/{id}
 #POST /listings
-
 #GET /listings/my
 #PATCH /listings/{id}
 
@@ -36,6 +35,7 @@ def create_listing(
     if not is_category:
         raise HTTPException(
             status_code=404,
+            detail="Такой категории не существует"
             )
 
     new_listing = Listing(
