@@ -1,29 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.listings.schemas import ListingCreate, ListingResponse, ListingUpdate
+from app.listings.schemas import ListingCreate, ListingResponse, ListingUpdate, ListingImageResponse
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 from app.users.models import User
-from app.listings.models import Listing
+from app.listings.models import Listing, ListingImage
 from app.categories.models import Category
+from app.deal_requests.models import DealRequest
 
 from typing import List, Literal, Optional
 from decimal import Decimal
+import os, uuid
 
-#GET /listings (с query-фильтрами)
-#GET /listings/{id}
-#POST /listings
-#GET /listings/my
-#PATCH /listings/{id}
-
-#POST /listings/{id}/complete
-#POST /listings/{id}/images
-#DELETE /listings/{id}/images/{image_id}
 
 
 router = APIRouter(prefix="/listings", tags=["listings"])
+
 
 @router.post("/", response_model=ListingResponse)
 def create_listing(
@@ -141,12 +135,132 @@ def patch_listing(
     return listing
 
 
+@router.post("/{listing_id}/complete", response_model=ListingResponse)
+def complete_listing(listing_id: int,
+                     current_user: User =  Depends(get_current_user),
+                     db: Session = Depends(get_db)
+                     ):
+    listing = db.execute(select(Listing).where(Listing.id == listing_id)).scalar_one_or_none()
+
+    if not listing:
+        raise HTTPException(
+            status_code=404,
+            detail="Такого обьявления не существует"
+        )
+    if current_user.id != listing.user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Это не ваше обьявление"
+        )
+    if listing.status != "reserved":
+        raise HTTPException(
+            status_code=409,
+            detail="Вы не можете закрыть обьявление пока оно в нынешнем статусе"
+        )
+    request = db.execute(select(DealRequest).where(DealRequest.listing_id == listing_id,
+                                                   DealRequest.status == "accepted")).scalar_one_or_none()
+    if not request:
+        raise HTTPException(
+            status_code=409,
+            detail="У этого обьявления нет принятого запроса"
+        )
+
+    listing.status = "completed"
+    request.status = "completed"
+    db.commit()
+    db.refresh(listing)
+    db.refresh(request)
+    return listing
 
 
+@router.post("/{listing_id}/images", response_model=ListingImageResponse)
+async def add_images(listing_id: int, image: UploadFile = File(...), current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    listing = db.execute(select(Listing).where(Listing.id == listing_id)).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(
+            status_code=404,
+            detail="Такого обьявление не существует"
+        )
+    if current_user.id != listing.user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Это не ваше обьявление"
+        )
+    listing_images = db.execute(select(ListingImage).where(ListingImage.listing_id == listing_id)).scalars().all()
+    image_position = len(listing_images)
+
+    if image_position > 4:
+        raise HTTPException (
+            status_code=409,
+            detail="Вы достигли лимита фотографий"
+        )
+
+    if image.content_type not in ["image/jpeg", "image/png", "image/webp"]:
+        raise HTTPException (
+            status_code=409,
+            detail="Формат изображения не поддерживается"
+        )
+    content = await image.read()
+    file_size_limit = 5 * 1024 * 1024
+
+    if len(content) >= file_size_limit:
+        raise HTTPException(
+            status_code=409,
+            detail="Размер изображения превышает разрешенный лимит"
+        )
+    unique_filename = f"{uuid.uuid4()}_{image.filename}"
+
+    os.makedirs("uploads", exist_ok=True)
+    file_path = f"uploads/{unique_filename}"
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    new_image = ListingImage(
+        img_file=file_path,
+        listing_id=listing_id,
+        position=image_position
+    )
+    db.add(new_image)
+    db.commit()
+    db.refresh(new_image)
+
+    return new_image
 
 
+@router.delete("/{listing_id}/images/{image_id}")
+def delete_image(listing_id: int,
+                 image_id: int,
+                 current_user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db)
+                 ):
+    listing = db.execute(select(Listing).where(Listing.id == listing_id)).scalar_one_or_none()
 
+    if not listing:
+        raise HTTPException(
+            status_code=404,
+            detail="Такого обьявления не существует"
+        )
+    if current_user.id != listing.user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Это не ваше обьявление"
+        )
+    image = db.execute(select(ListingImage).where(ListingImage.listing_id == listing_id,
+                                                  ListingImage.id == image_id)).scalar_one_or_none()
+    if not image:
+        raise HTTPException(
+            status_code=404,
+            detail="Такого изображения нет"
+        )
+    try:
+        os.remove(image.img_file)
+    except FileNotFoundError:
+        pass
 
+    db.delete(image)
+    db.commit()
+
+    return{"detail": "Изображение удалено"}
 
 
 
