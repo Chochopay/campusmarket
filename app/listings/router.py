@@ -3,8 +3,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.listings.schemas import ListingCreate, ListingResponse, ListingUpdate, ListingImageResponse
+
 from app.database import get_db
 from app.auth.dependencies import get_current_user
+
 from app.users.models import User
 from app.listings.models import Listing, ListingImage
 from app.categories.models import Category
@@ -164,9 +166,14 @@ def complete_listing(listing_id: int,
             status_code=409,
             detail="У этого обьявления нет принятого запроса"
         )
+    other_requests = db.execute(select(DealRequest).where(DealRequest.listing_id == listing_id,
+                                                          DealRequest.id != request.id,
+                                                          DealRequest.status == "pending")).scalars().all()
 
     listing.status = "completed"
     request.status = "completed"
+    for other_request in other_requests:
+        other_request.status = "cancelled"
     db.commit()
     db.refresh(listing)
     db.refresh(request)
