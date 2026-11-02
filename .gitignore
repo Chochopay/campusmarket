@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 database.db
 .env
+!.env.example
 uploads/

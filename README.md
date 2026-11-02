@@ -58,7 +58,14 @@
 ### 2. Установка .env
 
 
-
+**Windows**
+```bash
+    Copy-Item env.example .env
+```
+**Linux / macOS**
+```bash
+    cp .env.example .env
+```
 ### 3. Сборка Docker образов и запуск контейнеров
 
 #### Первый запуск
@@ -81,3 +88,7 @@
 ```bash
     docker compose up --build
 ```
+
+
+После того как докер закончит сборку
+откройте проект по ссылке [http://localhost:8000/docs](http://localhost:8000/docs)
