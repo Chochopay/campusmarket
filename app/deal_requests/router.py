@@ -28,18 +28,18 @@ def create_request(data: DealRequestCreate,
     if not listing:
         raise HTTPException(
             status_code=404,
-            detail="Такого обьявления нет"
+            detail="Такого объявления нет"
         )
     if listing.status != "published":
         raise HTTPException(
             status_code=409,
-            detail="Вы не можете оставить заявку на неопубликованное обьявление"
+            detail="Вы не можете оставить заявку на неопубликованное объявление"
         )
 
     if listing.user_id == current_user.id:
         raise HTTPException(
             status_code=403,
-            detail="Вы не можете оставить заявку на свое обьявление"
+            detail="Вы не можете оставить заявку на свое объявление"
         )
     request = db.execute(select(DealRequest).where(DealRequest.buyer_id == current_user.id,
                                                    DealRequest.listing_id == listing_id,
@@ -47,7 +47,7 @@ def create_request(data: DealRequestCreate,
     if request:
         raise HTTPException(
             status_code=409,
-            detail="Вы уже оставляли заявку на это обьявление"
+            detail="Вы уже оставляли заявку на это объявление"
         )
     new_request = DealRequest(
         buyer_id=current_user.id,
@@ -70,12 +70,12 @@ def get_requests(listing_id: int,
     if not listing:
         raise HTTPException(
             status_code=404,
-            detail="Такого обьявления нет"
+            detail="Такого объявления нет"
         )
     if listing.user_id != current_user.id:
         raise HTTPException(
             status_code=403,
-            detail="Это не выше обьявление"
+            detail="Это не выше объявление"
         )
     requests = db.execute(select(DealRequest).where(DealRequest.listing_id == listing_id)).scalars().all()
     return requests
@@ -101,12 +101,12 @@ def accept_request(request_id: int, current_user: User = Depends(get_current_use
     if not listing:
         raise HTTPException(
             status_code=404,
-            detail="Такого обьявления нет"
+            detail="Такого объявления нет"
         )
     if listing.user_id != current_user.id:
         raise HTTPException(
             status_code=403,
-            detail="Это не ваше обьявление"
+            detail="Это не ваше объявление"
         )
     if request.status != "pending":
         raise HTTPException(
@@ -122,7 +122,7 @@ def accept_request(request_id: int, current_user: User = Depends(get_current_use
     if listing.status != "published":
         raise HTTPException(
             status_code=409,
-            detail="Это обьявление не опубликовано или уже завершено"
+            detail="Это объявление не опубликовано или уже завершено"
         )
 
     request.status = "accepted"
@@ -154,7 +154,7 @@ def cancel_request(request_id: int,
     if not listing:
         raise HTTPException(
             status_code=404,
-            detail="Такого обьявления нет"
+            detail="Такого объявления нет"
         )
     is_buyer = request.buyer_id == current_user.id
     is_seller = listing.user_id == current_user.id

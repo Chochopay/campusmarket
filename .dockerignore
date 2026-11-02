@@ -1,0 +1,7 @@
+.venv
+.git
+.env
+__pycache__
+database.db
+uploads/
+.idea

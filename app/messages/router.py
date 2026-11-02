@@ -32,7 +32,7 @@ def create_message(request_id: int,
     if not listing:
         raise HTTPException(
             status_code=404,
-            detail="Такого обьявления нет"
+            detail="Такого объявления нет"
         )
 
     if current_user.id not in [request.buyer_id, listing.user_id]:
@@ -71,7 +71,7 @@ def get_messages(request_id: int,
     if not listing:
         raise HTTPException(
             status_code=404,
-            detail="Такого обьявления нет"
+            detail="Такого объявления нет"
         )
     if current_user.id not in [request.buyer_id, listing.user_id]:
         raise HTTPException(

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.listings.schemas import ListingCreate, ListingResponse, ListingUpdate, ListingImageResponse
 
 from app.database import get_db
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, get_optional_user, require_moderator_or_admin, is_moder_or_admin
 
 from app.users.models import User
 from app.listings.models import Listing, ListingImage
@@ -28,11 +28,11 @@ def create_listing(
         db: Session = Depends(get_db)):
 
     is_category = db.execute(select(Category).where(Category.id==data.category_id)).scalar_one_or_none()
-    if not is_category:
-        raise HTTPException(
-            status_code=404,
-            detail="Такой категории не существует"
-            )
+    #if not is_category:
+       # raise HTTPException(
+          #  status_code=404,
+         #   detail="Такой категории не существует"
+          #  )
 
     new_listing = Listing(
         name=data.name,
@@ -57,12 +57,17 @@ def get_my_listings(current_user: User = Depends(get_current_user), db: Session 
 
 
 @router.get("/{listing_id}", response_model=ListingResponse)
-def get_listing_by_id(listing_id: int, db: Session = Depends(get_db)):
+def get_listing_by_id(listing_id: int, current_user: User | None = Depends(get_optional_user), db: Session = Depends(get_db)):
     listing = db.execute(select(Listing).where(Listing.id == listing_id)).scalar_one_or_none()
     if not listing:
         raise HTTPException(
-            status_code = 404,
-            detail="Такого обьявления нет"
+            status_code=404,
+            detail="Такого объявления не существует"
+        )
+    if (current_user is None or not is_moder_or_admin(current_user.role)) and listing.status == "hidden":
+        raise HTTPException(
+            status_code=404,
+            detail="Такого объявления не существует"
         )
     return listing
 
@@ -115,20 +120,26 @@ def patch_listing(
     if not listing:
         raise HTTPException(
             status_code=404,
-            detail="Такого обьявления не существует"
+            detail="Такого объявления не существует"
         )
     if listing.user_id != current_user.id:
         raise HTTPException(
             status_code=403,
-            detail="Это не выше обьявление"
+            detail="Это не выше объявление"
         )
     if listing.status in ("reserved", "completed"):
         raise HTTPException(
             status_code=409,
-            detail="Вы не можете редактировать обьявление пока оно в нынешнем статусе"
+            detail="Вы не можете редактировать объявление пока оно в нынешнем статусе"
         )
 
     update_data = listing_update.model_dump(exclude_unset=True)
+
+    if listing.status == "hidden" and "status" in update_data:
+        raise HTTPException(
+            status_code=403,
+            detail="Вы не можете поменять статус объявления пока оно скрыто модератором"
+        )
     for key, value in update_data.items():
         setattr(listing, key, value)
 
@@ -147,28 +158,29 @@ def complete_listing(listing_id: int,
     if not listing:
         raise HTTPException(
             status_code=404,
-            detail="Такого обьявления не существует"
+            detail="Такого объявления не существует"
         )
     if current_user.id != listing.user_id:
         raise HTTPException(
             status_code=403,
-            detail="Это не ваше обьявление"
+            detail="Это не ваше объявление"
         )
     if listing.status != "reserved":
         raise HTTPException(
             status_code=409,
-            detail="Вы не можете закрыть обьявление пока оно в нынешнем статусе"
+            detail="Вы не можете закрыть объявление пока оно в нынешнем статусе"
         )
     request = db.execute(select(DealRequest).where(DealRequest.listing_id == listing_id,
                                                    DealRequest.status == "accepted")).scalar_one_or_none()
     if not request:
         raise HTTPException(
             status_code=409,
-            detail="У этого обьявления нет принятого запроса"
+            detail="У этого объявления нет принятого запроса"
         )
-    other_requests = db.execute(select(DealRequest).where(DealRequest.listing_id == listing_id,
-                                                          DealRequest.id != request.id,
-                                                          DealRequest.status == "pending")).scalars().all()
+    other_requests = db.execute(select(DealRequest)
+                        .where(DealRequest.listing_id == listing_id,
+                            DealRequest.id != request.id,
+                            DealRequest.status == "pending")).scalars().all()
 
     listing.status = "completed"
     request.status = "completed"
@@ -186,12 +198,12 @@ async def add_images(listing_id: int, image: UploadFile = File(...), current_use
     if not listing:
         raise HTTPException(
             status_code=404,
-            detail="Такого обьявление не существует"
+            detail="Такого объявление не существует"
         )
     if current_user.id != listing.user_id:
         raise HTTPException(
             status_code=403,
-            detail="Это не ваше обьявление"
+            detail="Это не ваше объявление"
         )
     listing_images = db.execute(select(ListingImage).where(ListingImage.listing_id == listing_id)).scalars().all()
     image_position = len(listing_images)
@@ -245,12 +257,12 @@ def delete_image(listing_id: int,
     if not listing:
         raise HTTPException(
             status_code=404,
-            detail="Такого обьявления не существует"
+            detail="Такого объявления не существует"
         )
     if current_user.id != listing.user_id:
         raise HTTPException(
             status_code=403,
-            detail="Это не ваше обьявление"
+            detail="Это не ваше объявление"
         )
     image = db.execute(select(ListingImage).where(ListingImage.listing_id == listing_id,
                                                   ListingImage.id == image_id)).scalar_one_or_none()
@@ -268,6 +280,33 @@ def delete_image(listing_id: int,
     db.commit()
 
     return{"detail": "Изображение удалено"}
+
+@router.post("/{listing_id}/restore", response_model=ListingResponse)
+def restore_the_listing(listing_id: int,
+                        current_user: User = Depends(require_moderator_or_admin),
+                        db: Session = Depends(get_db)):
+    listing = db.execute(select(Listing).where(Listing.id == listing_id)).scalar_one_or_none()
+    if not listing:
+        raise HTTPException(
+            status_code=404,
+            detail="Такого объявления не существует"
+        )
+    if listing.status != "hidden":
+        raise HTTPException(
+            status_code=409,
+            detail="Это объявление не скрыто"
+        )
+    request = db.execute(select(DealRequest).where(DealRequest.listing_id == listing.id,
+                                                   DealRequest.status == "completed")
+                         ).scalars().first()
+    if request:
+        listing.status = "completed"
+    else:
+        listing.status = "published"
+
+    db.commit()
+    db.refresh(listing)
+    return listing
 
 
 

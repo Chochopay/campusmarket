@@ -68,8 +68,8 @@ def add_listing_to_favorites(data: FavoriteAdd,
 def get_my_favorites(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     favorite_listings = db.execute(select(Listing).where(Listing.id.in_(
                                         select(Favorite.listing_id).where(
-                                            Favorite.user_id == current_user.id
-                                        )))).scalars().all()
+                                            Favorite.user_id == current_user.id)),
+                                            Listing.status != "hidden")).scalars().all()
     return favorite_listings
 
 

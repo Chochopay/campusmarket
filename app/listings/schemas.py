@@ -23,7 +23,7 @@ class ListingCreate(BaseModel):
     def validate_price_by_mode(self):
         if self.mode == "sale" and (self.price is None or self.price <= 0 ):
             raise ValueError("для режима 'продажа' цена должна быть положительной")
-        if self.mode == "exchange" and (self.price is not None and self.price != 0):
+        if self.mode == "exchange" and (self.price is not None):
             raise ValueError("для режима 'обмен' цена должна отсутствовать")
         if self.mode == "free" and self.price not in (0, None):
             raise ValueError("для режима 'бесплатно' цена должна равняться нулю или отсутствовать")
@@ -32,8 +32,8 @@ class ListingCreate(BaseModel):
 
 class ListingUpdate(BaseModel):
 
-    name: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = Field(default=None, max_length=1000)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    description: Optional[str] = Field(default=None, min_length=1, max_length=1000)
     condition: Optional[Literal["new", "used"]] = None
     mode: Optional[Literal["sale", "exchange", "free"]] = None
     price: Optional[Decimal] = None
