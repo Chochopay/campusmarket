@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 from decimal import Decimal
 from typing import List, Literal, Optional
 
@@ -32,14 +32,20 @@ class ListingCreate(BaseModel):
 
 class ListingUpdate(BaseModel):
 
+    model_config = ConfigDict(str_strip_whitespace=True)
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     description: Optional[str] = Field(default=None, min_length=1, max_length=1000)
     condition: Optional[Literal["new", "used"]] = None
     mode: Optional[Literal["sale", "exchange", "free"]] = None
-    price: Optional[Decimal] = None
+    price: Optional[Decimal] = Field(default=None, )
     category_id: Optional[int] = None
     status: Optional[Literal["published", "unpublished"]] = None
 
+    @model_validator(mode="after")
+    def validate_price(self):
+        if self.price <= 0:
+            raise ValueError("Цена не может быть меньше или равняться нулю")
+        return self
 
 class ListingResponse(BaseModel):
 

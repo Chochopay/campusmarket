@@ -1,3 +1,5 @@
+from app import config
+
 from fastapi import FastAPI
 from app.database import Base, engine
 from contextlib import asynccontextmanager
