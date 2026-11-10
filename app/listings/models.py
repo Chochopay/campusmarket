@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import ForeignKey, Numeric
+from sqlalchemy import ForeignKey, Numeric, Index
 from decimal import Decimal
 from app.database import Base
 from typing import List, Optional
@@ -25,6 +25,12 @@ class Listing(Base):
 
 class ListingImage(Base):
     __tablename__="listing_images"
+    __table_args__ = (Index(
+        "uq_position_per_listing",
+        "listing_id",
+        "position",
+        unique=True
+    ),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     img_file: Mapped[str] = mapped_column(nullable=False)

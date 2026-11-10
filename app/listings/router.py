@@ -1,11 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.listings.schemas import ListingCreate, ListingResponse, ListingUpdate, ListingImageResponse
 
 from app.database import get_db
-from app.auth.dependencies import get_current_user, get_optional_user, require_moderator_or_admin, is_moder_or_admin
+from app.auth.dependencies import (get_current_user,
+                                   get_optional_user,
+                                   require_moderator_or_admin,
+                                   is_moder_or_admin,
+                                   detect_image_type)
 
 from app.users.models import User
 from app.listings.models import Listing, ListingImage
@@ -28,11 +33,11 @@ def create_listing(
         db: Session = Depends(get_db)):
 
     is_category = db.execute(select(Category).where(Category.id==data.category_id)).scalar_one_or_none()
-    #if not is_category:
-       # raise HTTPException(
-          #  status_code=404,
-         #   detail="Такой категории не существует"
-          #  )
+    if not is_category:
+        raise HTTPException(
+            status_code=404,
+            detail="Такой категории не существует"
+            )
 
     new_listing = Listing(
         name=data.name,
@@ -122,6 +127,7 @@ def patch_listing(
             status_code=404,
             detail="Такого объявления не существует"
         )
+
     if listing.user_id != current_user.id:
         raise HTTPException(
             status_code=403,
@@ -132,8 +138,40 @@ def patch_listing(
             status_code=409,
             detail="Вы не можете редактировать объявление пока оно в нынешнем статусе"
         )
+    if listing_update.category_id:
+        is_category = db.execute(select(Category).where(Category.id == listing_update.category_id)).scalar_one_or_none()
+        if not is_category:
+            raise HTTPException(
+                status_code=404,
+                detail="Такой категории не существует"
+            )
+
 
     update_data = listing_update.model_dump(exclude_unset=True)
+    if "mode" in update_data:
+        final_mode = update_data["mode"]
+    else:
+        final_mode = listing.mode
+    if "price" in update_data:
+        price = update_data["price"]
+    else:
+        price = listing.price
+    if "price" in update_data or "mode" in update_data:
+        if final_mode == "sale" and price in (None, 0):
+            raise HTTPException(
+                status_code=409,
+                detail="Цена для режима 'Продажа' должна быть больше нуля"
+            )
+        elif final_mode == "exchange" and price is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Цена для режима 'Обмен' должна отсутствовать"
+            )
+        elif final_mode == "free" and price not in (0, None):
+            raise HTTPException(
+                status_code=409,
+                detail="Цена для режима 'Бесплатно' должна равняться нулю или отсутствовать"
+            )
 
     if listing.status == "hidden" and "status" in update_data:
         raise HTTPException(
@@ -206,28 +244,37 @@ async def add_images(listing_id: int, image: UploadFile = File(...), current_use
             detail="Это не ваше объявление"
         )
     listing_images = db.execute(select(ListingImage).where(ListingImage.listing_id == listing_id)).scalars().all()
-    image_position = len(listing_images)
-
-    if image_position > 4:
-        raise HTTPException (
-            status_code=409,
-            detail="Вы достигли лимита фотографий"
+    max_images_per_listing = 5
+    if len(listing_images) >= max_images_per_listing:
+        raise HTTPException(
+            status_code=400,
+            detail="Вы превысили лимит разрешеных изображений"
         )
-
-    if image.content_type not in ["image/jpeg", "image/png", "image/webp"]:
-        raise HTTPException (
-            status_code=409,
-            detail="Формат изображения не поддерживается"
-        )
-    content = await image.read()
-    file_size_limit = 5 * 1024 * 1024
-
-    if len(content) >= file_size_limit:
+    taken = {img.position for img in listing_images}
+    image_position = next((p for p in range(1, max_images_per_listing + 1) if p not in taken), None)
+    if image_position is None:
         raise HTTPException(
             status_code=409,
-            detail="Размер изображения превышает разрешенный лимит"
+            detail="Ошибка определения позиции изображения"
         )
-    unique_filename = f"{uuid.uuid4()}_{image.filename}"
+    file_size_limit = 5 * 1024 * 1024
+    content = await image.read(file_size_limit + 1)
+    if len(content) > file_size_limit:
+        raise HTTPException(
+            status_code=400,
+            detail="Размер изображения превышает разрешенный лимит")
+
+    extensions_dict = {"image/jpeg": ".jpeg", "image/png": ".png", "image/webp": ".webp"}
+    content_type = detect_image_type(content)
+
+    if not content_type:
+        raise HTTPException (
+            status_code=400,
+            detail="Формат изображения не поддерживается"
+        )
+
+    extension = extensions_dict[content_type]
+    unique_filename = f"{uuid.uuid4()}{extension}"
 
     os.makedirs("uploads", exist_ok=True)
     file_path = f"uploads/{unique_filename}"
@@ -240,7 +287,15 @@ async def add_images(listing_id: int, image: UploadFile = File(...), current_use
         position=image_position
     )
     db.add(new_image)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        os.remove(file_path)
+        raise HTTPException(
+            status_code=409,
+            detail="Изображение с такой позицией уже существует"
+        )
     db.refresh(new_image)
 
     return new_image

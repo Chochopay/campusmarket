@@ -37,15 +37,24 @@ class ListingUpdate(BaseModel):
     description: Optional[str] = Field(default=None, min_length=1, max_length=1000)
     condition: Optional[Literal["new", "used"]] = None
     mode: Optional[Literal["sale", "exchange", "free"]] = None
-    price: Optional[Decimal] = Field(default=None, )
+    price: Optional[Decimal] = None
     category_id: Optional[int] = None
     status: Optional[Literal["published", "unpublished"]] = None
 
     @model_validator(mode="after")
     def validate_price(self):
-        if self.price <= 0:
-            raise ValueError("Цена не может быть меньше или равняться нулю")
+        if self.price is not None and self.price < 0:
+            raise ValueError("Цена не может быть меньше нулю")
         return self
+    @model_validator(mode="after")
+    def forbid_none_for_required(self):
+        required_fields = {"name", "description", "condition", "mode", "category_id", "status"}
+        for field in self.model_fields_set & required_fields:
+            value = getattr(self, field)
+            if value is None:
+                raise ValueError(f"Значение у обязательного поля {field} не может отсутствовать")
+        return self
+
 
 class ListingResponse(BaseModel):
 

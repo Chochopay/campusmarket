@@ -19,6 +19,10 @@ from app.users.router import router as users_router
 from app.categories.router import router as categories_router
 from app.listings.router import router as listings_router
 from app.deal_requests.router import router as deal_requests_router
+from app.messages.router import router as messages_router
+from app.favorites.router import router as favorites_router
+from app.reports.router import router as reports_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,3 +36,6 @@ app.include_router(users_router)
 app.include_router(categories_router)
 app.include_router(listings_router)
 app.include_router(deal_requests_router)
+app.include_router(messages_router)
+app.include_router(favorites_router)
+app.include_router(reports_router)
