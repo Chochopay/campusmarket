@@ -22,3 +22,14 @@ class DealRequest(Base):
     text: Mapped[str] = mapped_column(nullable=False)
 
     messages: Mapped[List["Message"]] = relationship(back_populates="request")
+
+    buyer: Mapped["User"] = relationship("User")
+    listing: Mapped["Listing"] = relationship("Listing")
+
+    @property
+    def buyer_username(self) -> str:
+        return self.buyer.username
+
+    @property
+    def listing_name(self) -> str:
+        return self.listing.name

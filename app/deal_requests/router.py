@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import List
@@ -8,6 +8,7 @@ from app.database import get_db
 from app.auth.dependencies import get_current_user
 
 from app.deal_requests.schemas import DealRequestCreate, DealRequestResponse
+from app.common.pagination_scheme import Pagination
 
 from app.users.models import User
 from app.listings.models import Listing
@@ -61,10 +62,12 @@ def create_request(data: DealRequestCreate,
     return new_request
 
 
-@router.get("/listings/{listing_id}/requests", response_model=List[DealRequestResponse])
+@router.get("/listings/{listing_id}/requests", response_model=Pagination[DealRequestResponse])
 def get_requests(listing_id: int,
-                 current_user: User = Depends(get_current_user),
-                 db: Session = Depends(get_db)):
+                    limit: int = Query(default=20, ge=1, le=100),
+                    offset: int = Query(default=0, ge=0),
+                    current_user: User = Depends(get_current_user),
+                    db: Session = Depends(get_db)):
 
     listing = db.execute(select(Listing).where(Listing.id == listing_id)).scalar_one_or_none()
     if not listing:
@@ -77,16 +80,24 @@ def get_requests(listing_id: int,
             status_code=403,
             detail="Это не выше объявление"
         )
-    requests = db.execute(select(DealRequest).where(DealRequest.listing_id == listing_id)).scalars().all()
-    return requests
+    query = select(DealRequest).where(DealRequest.listing_id == listing_id).order_by(DealRequest.id.desc())
+    total = db.scalar(select(func.count()).select_from(query.subquery()))
+    query = query.limit(limit).offset(offset)
+    requests = db.execute(query).scalars().all()
+    return {"items": requests, "total": total, "limit": limit, "offset": offset}
 
 
-@router.get("/requests/my", response_model=List[DealRequestResponse])
-def get_my_requests(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@router.get("/requests/my", response_model=Pagination[DealRequestResponse])
+def get_my_requests(limit: int = Query(default=20, ge=1, le=100),
+                    offset: int = Query(default=0, ge=0),
+                    current_user: User = Depends(get_current_user),
+                    db: Session = Depends(get_db)):
 
-    requests = db.execute(select(DealRequest).where(DealRequest.buyer_id == current_user.id)
-                          ).scalars().all()
-    return requests
+    query = select(DealRequest).where(DealRequest.buyer_id == current_user.id).order_by(DealRequest.id.desc())
+    total = db.scalar((select(func.count()).select_from(query.subquery())))
+    query = query.limit(limit).offset(offset)
+    requests = db.execute(query).scalars().all()
+    return {"items": requests, "total": total, "limit": limit, "offset": offset}
 
 
 @router.post("/requests/{request_id}/accept")
@@ -178,5 +189,4 @@ def cancel_request(request_id: int,
 
     db.commit()
     return {"Успешно": f"Заявка отклонена"}
-
 

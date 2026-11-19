@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -9,11 +9,12 @@ from app.favorites.models import Favorite
 
 from app.favorites.schemas import FavoriteAdd, FavoriteResponse
 from app.listings.schemas import ListingResponse
+from app.common.pagination_scheme import Pagination
 
 from app.auth.dependencies import get_current_user
 from app.database import get_db
 
-from typing import List
+from typing import List, Optional
 
 
 router = APIRouter(prefix="/favorites", tags=["favorites"])
@@ -64,13 +65,21 @@ def add_listing_to_favorites(data: FavoriteAdd,
     return new_favorite
 
 
-@router.get("/", response_model=List[ListingResponse])
-def get_my_favorites(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    favorite_listings = db.execute(select(Listing).where(Listing.id.in_(
+@router.get("/", response_model=Pagination[ListingResponse])
+def get_my_favorites(limit: int = Query(default=20, ge=1, le=100),
+                     offset: int = Query(default=0, ge=0),
+                    current_user: User = Depends(get_current_user),
+                    db: Session = Depends(get_db)):
+
+    query = select(Listing).where(Listing.id.in_(
                                         select(Favorite.listing_id).where(
                                             Favorite.user_id == current_user.id)),
-                                            Listing.status != "hidden")).scalars().all()
-    return favorite_listings
+                                            Listing.status != "hidden").order_by(Listing.id.desc())
+    total = db.scalar(select(func.count()).select_from(query.subquery()))
+    query = query.limit(limit).offset(offset)
+    favorites = db.execute(query).scalars().all()
+
+    return {"items": favorites, "total": total, "limit": limit, "offset": offset}
 
 
 @router.delete("/{listing_id}")

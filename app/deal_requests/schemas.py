@@ -8,6 +8,8 @@ class DealRequestResponse(BaseModel):
     status: str
     text: str
     model_config={"from_attributes": True}
+    buyer_username: str
+    listing_name: str
 
 
 class DealRequestCreate(BaseModel):

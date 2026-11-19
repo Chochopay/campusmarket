@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.listings.schemas import ListingCreate, ListingResponse, ListingUpdate, ListingImageResponse
+from app.common.pagination_scheme import Pagination
 
 from app.database import get_db
 from app.auth.dependencies import (get_current_user,
@@ -17,7 +18,7 @@ from app.listings.models import Listing, ListingImage
 from app.categories.models import Category
 from app.deal_requests.models import DealRequest
 
-from typing import List, Literal, Optional
+from typing import Literal, Optional
 from decimal import Decimal
 import os, uuid
 
@@ -54,11 +55,19 @@ def create_listing(
     return new_listing
 
 
-@router.get("/my", response_model=List[ListingResponse])
-def get_my_listings(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+@router.get("/my", response_model=Pagination[ListingResponse])
+def get_my_listings(limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        current_user: User = Depends(get_current_user),
+                    db: Session = Depends(get_db)):
 
-    user_listings = db.execute(select(Listing).where(Listing.user_id == current_user.id)).scalars().all()
-    return user_listings
+    query = select(Listing).where(Listing.user_id == current_user.id).order_by(Listing.id.desc)
+    total = db.scalar((select(func.count()).select_from(query.subquery())))
+    query = query.limit(limit).offset(offset)
+    user_listings = db.execute(query).scalars().all()
+
+
+    return {"items": user_listings, "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/{listing_id}", response_model=ListingResponse)
@@ -77,11 +86,14 @@ def get_listing_by_id(listing_id: int, current_user: User | None = Depends(get_o
     return listing
 
 
-@router.get("/", response_model=List[ListingResponse])
+@router.get("/", response_model=Pagination[ListingResponse])
 def get_listings(
+        q: Optional[str] = Query(default=None, min_length=1, max_length=200),
+        limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
         category_id: Optional[int] = None,
-        condition: Optional[str] = None,
-        mode: Optional[str] = None,
+        condition: Optional[Literal["new", "used"]] = None,
+        mode: Optional[Literal["sale", "exchange", "free"]] = None,
         min_price: Optional[Decimal] = None,
         max_price: Optional[Decimal] = None,
         sort: Optional[Literal["date", "price"]] = None,
@@ -104,13 +116,28 @@ def get_listings(
     if max_price is not None:
         query = query.where(Listing.price <=max_price)
 
+    if q:
+        q = q.strip()
+        query = query.where(
+            or_(
+                Listing.name.ilike(f"%{q}%"),
+                Listing.description.ilike(f"%{q}%")
+                                   ))
+    count_query = select(func.count()).select_from(query.subquery())
+    total = db.scalar(count_query)
+
     if sort is not None:
         if sort == "price":
-            query = query.order_by(Listing.price)
+            query = query.order_by(Listing.price.asc().nulls_last(), Listing.id.desc())
         elif sort == "date":
-            query = query.order_by(Listing.created_at)
+            query = query.order_by(Listing.created_at.desc(), Listing.id.desc())
+    else:
+        query = query.order_by(Listing.id.desc())
 
-    return db.execute(query).scalars().all()
+    query = query.limit(limit).offset(offset)
+    listings = db.execute(query).scalars().all()
+
+    return {"items": listings, "total": total, "limit": limit, "offset": offset}
 
 
 @router.patch("/{listing_id}", response_model=ListingResponse)
@@ -245,17 +272,12 @@ async def add_images(listing_id: int, image: UploadFile = File(...), current_use
         )
     listing_images = db.execute(select(ListingImage).where(ListingImage.listing_id == listing_id)).scalars().all()
     max_images_per_listing = 5
-    if len(listing_images) >= max_images_per_listing:
-        raise HTTPException(
-            status_code=400,
-            detail="Вы превысили лимит разрешеных изображений"
-        )
     taken = {img.position for img in listing_images}
     image_position = next((p for p in range(1, max_images_per_listing + 1) if p not in taken), None)
     if image_position is None:
         raise HTTPException(
             status_code=409,
-            detail="Ошибка определения позиции изображения"
+            detail="Вы превысили лимит разрешённых изображений"
         )
     file_size_limit = 5 * 1024 * 1024
     content = await image.read(file_size_limit + 1)

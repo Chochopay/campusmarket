@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, model_validator, ConfigDict
 from decimal import Decimal
 from typing import List, Literal, Optional
+from datetime import datetime
 
 
 class ListingImageResponse(BaseModel):
@@ -68,6 +69,9 @@ class ListingResponse(BaseModel):
     category_id: int
     user_id: int
     listing_images: List[ListingImageResponse]
+    seller_username: str
+    category_name: str
+    created_at: datetime
     model_config = {"from_attributes":True}
 
 

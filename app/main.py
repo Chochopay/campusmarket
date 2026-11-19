@@ -1,6 +1,7 @@
 from app import config
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from app.database import Base, engine
 from contextlib import asynccontextmanager
 
@@ -23,6 +24,8 @@ from app.messages.router import router as messages_router
 from app.favorites.router import router as favorites_router
 from app.reports.router import router as reports_router
 
+import os
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,11 +34,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-app.include_router(auth_router)
-app.include_router(users_router)
-app.include_router(categories_router)
-app.include_router(listings_router)
-app.include_router(deal_requests_router)
-app.include_router(messages_router)
-app.include_router(favorites_router)
-app.include_router(reports_router)
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+app.include_router(auth_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
+app.include_router(categories_router, prefix="/api")
+app.include_router(listings_router, prefix="/api")
+app.include_router(deal_requests_router, prefix="/api")
+app.include_router(messages_router, prefix="/api")
+app.include_router(favorites_router, prefix="/api")
+app.include_router(reports_router, prefix="/api")

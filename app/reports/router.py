@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import List, Literal, Optional
 
 from app.users.models import User
@@ -10,6 +10,7 @@ from app.reports.models import Report
 from app.deal_requests.models import DealRequest
 
 from app.reports.schemas import ReportResponse, ReportCreate, ReportAccess
+from app.common.pagination_scheme import Pagination
 
 from app.auth.dependencies import require_moderator_or_admin, get_current_user
 
@@ -65,13 +66,19 @@ def create_report(data: ReportCreate, current_user: User = Depends(get_current_u
     return new_report
 
 
-@router.get("/", response_model=List[ReportResponse])
-def get_reports(status: Optional[Literal["pending", "resolved"]] = None, current_user: User = Depends(require_moderator_or_admin), db: Session = Depends(get_db)):
-    query = select(Report)
+@router.get("/", response_model=Pagination[ReportResponse])
+def get_reports(limit: int = Query(default=20, ge=1, le=100),
+                offset: int = Query(default=0, ge=0),
+                status: Optional[Literal["pending", "resolved"]] = None,
+                current_user: User = Depends(require_moderator_or_admin),
+                db: Session = Depends(get_db)):
+    query = select(Report).order_by(Report.id.desc)
     if status:
         query = query.where(Report.status == status)
+    total = db.scalar(select(func.count()).select_from(query.subquery()))
+    query = query.limit(limit).offset(offset)
     reports = db.execute(query).scalars().all()
-    return reports
+    return {"items": reports, "total": total, "limit": limit, "offset": offset}
 
 
 @router.patch("/{report_id}", response_model=ReportResponse)

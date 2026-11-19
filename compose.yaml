@@ -1,16 +1,35 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+
     ports:
       - "8000:8000"
+
     env_file:
       - .env
+
     environment:
-      DATABASE_URL: "sqlite:////./app/data/database.db"
+      DATABASE_URL: "sqlite:////app/data/database.db"
+
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
     volumes:
       - app_data:/app/data
       - app_uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+    ports:
+      - "5173:5173"
+
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
 
 volumes:
   app_data:

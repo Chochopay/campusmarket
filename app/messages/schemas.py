@@ -12,4 +12,5 @@ class MessageResponse(BaseModel):
     text: str
     sender_id: int
     created_at: datetime
+    sender_username: str
     model_config={"from_attributes": True}

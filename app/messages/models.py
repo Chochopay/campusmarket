@@ -13,6 +13,11 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(nullable=False, default=datetime.now(timezone.utc))
 
     request: Mapped["DealRequest"] = relationship(back_populates="messages")
+    sender: Mapped["User"] = relationship("User")
+
+    @property
+    def sender_username(self) -> str:
+        return self.sender.username
 
 
 

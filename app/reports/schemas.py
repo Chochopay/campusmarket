@@ -30,4 +30,6 @@ class ReportResponse(BaseModel):
     reason: str
     status: str
     resolution: Optional[str] = Field(default=None, max_length=500)
+    listing_name: str
+    listing_status: str
     model_config={"from_attributes": True}

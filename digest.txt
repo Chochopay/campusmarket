@@ -406,7 +406,7 @@ def upgrade() -> None:
     op.create_table('listings',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(), nullable=False),
-    sa.Column('description', sa.String(), nullable=False),
+    sa.Column('ription', sa.String(), nullable=False),
     sa.Column('status', sa.String(), nullable=False),
     sa.Column('condition', sa.String(), nullable=False),
     sa.Column('mode', sa.String(), nullable=False),
@@ -822,7 +822,7 @@ class Listing(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(nullable=False)
-    description: Mapped[str] = mapped_column(nullable=False)
+    ription: Mapped[str] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(nullable=False, default="published")
     condition: Mapped[str] = mapped_column(nullable=False)
     mode: Mapped[str] = mapped_column(nullable=False)

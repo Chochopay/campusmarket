@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import ForeignKey, Index
 from app.database import Base
 from typing import Optional
@@ -18,3 +18,13 @@ class Report(Base):
     reason: Mapped[str] = mapped_column()
     status: Mapped[str] = mapped_column(nullable=False, default="pending")
     resolution: Mapped[Optional[str]] = mapped_column(nullable=True)
+
+    listing: Mapped["Listing"] = relationship("Listing")
+
+    @property
+    def listing_name(self) -> str:
+        return self.listing.name
+
+    @property
+    def listing_status(self) -> str:
+        return self.listing.status

@@ -20,7 +20,19 @@ class Listing(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
 
-    listing_images: Mapped[List["ListingImage"]] = relationship("ListingImage", back_populates="listing" )
+    listing_images: Mapped[List["ListingImage"]] = relationship("ListingImage",
+                                                                back_populates="listing",
+                                                                order_by="ListingImage.position")
+    seller: Mapped["User"] = relationship("User")
+    category: Mapped["Category"] = relationship("Category")
+
+    @property
+    def seller_username(self) -> str:
+        return self.seller.username
+
+    @property
+    def category_name(self) -> str:
+        return self.category.name
 
 
 class ListingImage(Base):
